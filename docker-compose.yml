@@ -1,0 +1,59 @@
+version: '3.9'
+
+services:
+
+  db12:
+    container_name: postgres12
+    image: postgres:12-alpine
+    restart: always
+    ports: [5432:5432]
+    volumes: [postgres_party_parrot:/var/lib/postgresql/data/]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?err}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
+      POSTGRES_DB: ${POSTGRES_DB:?err}
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -d postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db12:5432/${POSTGRES_DB}"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+  db_upgrade:
+    container_name: vrg18_db_upgrade
+    image: vrg18/party_parrot
+    build: .
+    links: [db12]
+    depends_on:
+      db12:
+        condition: service_healthy
+    environment:
+      DJANGO_DB_HOST: db12
+      DJANGO_DB_NAME: ${POSTGRES_DB}
+      DJANGO_DB_USER: ${POSTGRES_USER}
+      DJANGO_DB_PASS: ${POSTGRES_PASSWORD}
+      DJANGO_DB_PORT: 5432
+      DJANGO_DEBUG: "False"
+    command: python3 manage.py migrate
+
+  party_parrot:
+    container_name: vrg18_party_parrot
+    image: vrg18/party_parrot
+    restart: always
+    ports: [8000:80]
+    links: [db12]
+    depends_on: [db_upgrade]
+    environment:
+      DJANGO_DB_HOST: db12
+      DJANGO_DB_NAME: ${POSTGRES_DB}
+      DJANGO_DB_USER: ${POSTGRES_USER}
+      DJANGO_DB_PASS: ${POSTGRES_PASSWORD}
+      DJANGO_DB_PORT: 5432
+      DJANGO_DEBUG: "False"
+
+volumes:
+  postgres_party_parrot:
+    name: postgres_party_parrot
+
+networks:
+  default:
+    name: net_ss2
