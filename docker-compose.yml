@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
 
-  db12:
+  pg12:
     container_name: postgres12
     image: postgres:12-alpine
     restart: always
@@ -13,21 +13,21 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?err}
       POSTGRES_DB: ${POSTGRES_DB:?err}
     healthcheck:
-        test: ["CMD-SHELL", "pg_isready -d postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db12:5432/${POSTGRES_DB}"]
+        test: ["CMD-SHELL", "pg_isready -d postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pg12:5432/${POSTGRES_DB}"]
         interval: 10s
         timeout: 5s
         retries: 5
 
-  db_upgrade:
-    container_name: vrg18_db_upgrade
-    image: vrg18/party_parrot
+  db_migrate:
+    container_name: vrg18_db_migrate
+    image: vrg18/party-parrot
     build: .
-    links: [db12]
+    links: [pg12]
     depends_on:
-      db12:
+      pg12:
         condition: service_healthy
     environment:
-      DJANGO_DB_HOST: db12
+      DJANGO_DB_HOST: pg12
       DJANGO_DB_NAME: ${POSTGRES_DB}
       DJANGO_DB_USER: ${POSTGRES_USER}
       DJANGO_DB_PASS: ${POSTGRES_PASSWORD}
@@ -37,22 +37,51 @@ services:
 
   party_parrot:
     container_name: vrg18_party_parrot
-    image: vrg18/party_parrot
+    image: vrg18/party-parrot
     restart: always
     ports: [8000:80]
-    links: [db12]
-    depends_on: [db_upgrade]
+    links: [pg12]
+    depends_on: [db_migrate]
     environment:
-      DJANGO_DB_HOST: db12
+      DJANGO_DB_HOST: pg12
       DJANGO_DB_NAME: ${POSTGRES_DB}
       DJANGO_DB_USER: ${POSTGRES_USER}
       DJANGO_DB_PASS: ${POSTGRES_PASSWORD}
       DJANGO_DB_PORT: 5432
       DJANGO_DEBUG: "False"
 
+  pg_exporter:
+    container_name: postgres-exporter
+    image: prometheuscommunity/postgres-exporter
+    restart: always
+    ports: [9187:9187]
+    links: [pg12]
+    depends_on: [db_migrate]
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pg12:5432/${POSTGRES_DB}?sslmode=disable
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus
+    restart: always
+    ports: [9090:9090]
+    volumes: [./prometheus.yml:/etc/prometheus/prometheus.yml:ro]
+    links: [pg_exporter]
+    depends_on: [pg_exporter]
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    restart: always
+    ports: [9001:3000]
+    volumes: [grafana-storage:/var/lib/grafana/]
+    links: [prometheus]
+
 volumes:
   postgres_party_parrot:
     name: postgres_party_parrot
+  grafana-storage:
+    name: grafana-storage
 
 networks:
   default:
