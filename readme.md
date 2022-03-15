@@ -21,7 +21,7 @@ docker-compose up -d
 
 Развернутое приложение и сопутствующие инструменты можно посмотреть здесь:
 
-- https://parrot.libera.pro
+- http://libera.pro:8000 (https://parrot.libera.pro - он же за nginx-прокси с SSL)
 - http://libera.pro:9090/targets
 - http://libera.pro:9001/d/postgres_health (Логин/пароль: admin/simbirsoft22)
 
